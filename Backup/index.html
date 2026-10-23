@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+    <title>Invoices</title>
+    <!-- Include html2pdf.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1a365d;
+            --secondary-color: #2b6cb0;
+            --bg-accent: #f7fafc;
+            --border-color: #e2e8f0;
+            --text-color: #2d3748;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+            box-sizing: border-box;
+        }
+        *, *::before, *::after {
+            box-sizing: inherit;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-color);
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            min-height: 100dvh;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .invoice-card {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            padding: 32px;
+        }
+
+        .year-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .year-btn {
+            background-color: #edf2f7;
+            color: var(--primary-color);
+            border: 2px solid var(--border-color);
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 40px;
+        }
+
+        .year-btn:hover {
+            border-color: var(--primary-color);
+        }
+
+        .year-btn.active {
+            background-color: var(--primary-color);
+            color: #ffffff;
+            border-color: var(--primary-color);
+        }
+
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+        }
+
+        .invoice-header h1 {
+            color: var(--primary-color);
+            margin: 0;
+            font-size: 1.75rem;
+        }
+
+        .client-info-block {
+            display: none;
+            background: var(--bg-accent);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: var(--text-color);
+            margin-bottom: 20px;
+        }
+
+        .client-info-block strong,
+        .bank-info-block strong {
+            color: var(--primary-color);
+            font-size: 0.95rem;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .bank-info-block {
+            display: none;
+            background: var(--bg-accent);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: var(--text-color);
+            margin-top: 24px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .download-btn {
+            background-color: transparent;
+            color: #ffffff;
+            border: none;
+            padding: 4px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            min-height: 36px;
+            border-radius: 6px;
+        }
+
+        .download-btn img {
+            height: 20px;
+            width: auto;
+            display: block;
+        }
+
+        .th-content {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 4px;
+            width: 100%;
+        }
+
+        .person-name {
+            display: block;
+            line-height: 1.25;
+            text-align: right;
+            font-size: 0.85rem;
+            font-weight: 600;
+            white-space: normal;
+            word-break: normal;
+            overflow-wrap: normal;
+        }
+
+        .table-wrapper {
+            overflow-x: visible;
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            table-layout: fixed;
+        }
+
+        th, td {
+            padding: 10px 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            vertical-align: middle;
+        }
+
+        th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            vertical-align: bottom;
+            padding-top: 12px;
+            padding-bottom: 12px;
+        }
+
+        th[data-col="item"],
+        td[data-col="item"] {
+            width: 24%;
+        }
+        th[data-col="sum"],
+        td[data-col="sum"] {
+            width: 7%;
+        }
+        th[data-col="charalampos"],
+        td[data-col="charalampos"],
+        th[data-col="dimompenis"],
+        td[data-col="dimompenis"],
+        th[data-col="vangelis"],
+        td[data-col="vangelis"] {
+            width: 18%;
+        }
+        th[data-col="notes"],
+        td[data-col="notes"] {
+            width: 15%;
+        }
+
+        th.num-col, td.num-col {
+            text-align: right;
+        }
+
+        td.num-col {
+            white-space: nowrap;
+        }
+
+        .category-row td {
+            background-color: var(--bg-accent);
+            font-weight: bold;
+            color: var(--secondary-color);
+            padding-top: 14px;
+            padding-bottom: 14px;
+            border-top: 2px solid var(--border-color);
+        }
+
+        tr:nth-child(even):not(.category-row):not(.total-row) {
+            background-color: #fdfdfd;
+        }
+
+        .total-row td {
+            background-color: #edf2f7;
+            font-weight: bold;
+            font-size: 1rem;
+            color: var(--primary-color);
+            border-top: 2px solid var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .notes-col {
+            font-size: 0.825rem;
+            color: #718096;
+        }
+
+        .invoice-view {
+            display: none;
+        }
+
+        .invoice-view.active {
+            display: block;
+        }
+
+        .nav-controls {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .nav-btn {
+            background-color: #ffffff;
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-height: 44px;
+        }
+
+        .nav-btn:hover {
+            background-color: var(--primary-color);
+            color: #ffffff;
+        }
+
+        .nav-btn.active {
+            background-color: var(--primary-color);
+            color: #ffffff;
+        }
+
+        @media (max-width: 900px) {
+            .invoice-card {
+                padding: 20px 16px;
+            }
+            table {
+                font-size: 0.82rem;
+            }
+            th, td {
+                padding: 8px 6px;
+            }
+            .person-name {
+                font-size: 0.78rem;
+            }
+            .nav-controls {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-controls {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px 8px;
+                padding-bottom: max(12px, env(safe-area-inset-bottom));
+            }
+
+            .invoice-card {
+                padding: 14px 12px;
+                border-radius: 10px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            }
+
+            .year-selector {
+                justify-content: center;
+                gap: 8px;
+                margin-bottom: 14px;
+            }
+
+            .year-btn {
+                flex: 1 1 auto;
+                min-width: 0;
+                padding: 10px 8px;
+                font-size: 0.85rem;
+                min-height: 44px;
+                border-radius: 8px;
+            }
+
+            .invoice-header {
+                padding-bottom: 12px;
+                margin-bottom: 14px;
+            }
+
+            .invoice-header h1 {
+                font-size: 1.25rem;
+                line-height: 1.25;
+            }
+
+            .client-info-block,
+            .bank-info-block {
+                padding: 10px 12px;
+                font-size: 0.8rem;
+                margin-bottom: 14px;
+            }
+
+            .table-wrapper {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                margin: 0 -12px;
+                padding: 0 12px;
+            }
+
+            table {
+                font-size: 0.78rem;
+                min-width: 560px;
+                table-layout: auto;
+            }
+
+            th, td {
+                padding: 8px 8px;
+            }
+
+            th {
+                font-size: 0.72rem;
+                line-height: 1.2;
+                position: sticky;
+                top: 0;
+                z-index: 2;
+            }
+
+            th[data-col="item"],
+            td[data-col="item"] {
+                position: sticky;
+                left: 0;
+                z-index: 1;
+                background-color: #fff;
+                box-shadow: 2px 0 4px -2px rgba(0,0,0,0.12);
+                width: auto;
+            }
+            th[data-col="item"] {
+                background-color: var(--primary-color);
+                z-index: 3;
+            }
+            .category-row td[data-col="item"],
+            .total-row td[data-col="item"] {
+                background-color: inherit;
+            }
+
+            .person-name {
+                font-size: 0.68rem;
+                line-height: 1.2;
+            }
+
+            .download-btn {
+                min-width: 40px;
+                min-height: 40px;
+            }
+
+            .download-btn img {
+                height: 22px;
+            }
+
+            .notes-col {
+                max-width: 100px;
+                font-size: 0.72rem;
+            }
+
+            .category-row td {
+                padding-top: 10px;
+                padding-bottom: 10px;
+                font-size: 0.8rem;
+            }
+
+            .total-row td {
+                font-size: 0.85rem;
+            }
+
+            .nav-controls {
+                display: flex;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                gap: 8px;
+                margin-top: 16px;
+                padding-top: 12px;
+                padding-bottom: 4px;
+                scrollbar-width: none;
+            }
+            .nav-controls::-webkit-scrollbar {
+                display: none;
+            }
+
+            .nav-btn {
+                flex: 0 0 auto;
+                width: auto;
+                min-width: 110px;
+                padding: 10px 14px;
+                font-size: 0.8rem;
+                min-height: 44px;
+                border-radius: 8px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .year-btn {
+                padding: 8px 4px;
+                font-size: 0.78rem;
+            }
+            .invoice-header h1 {
+                font-size: 1.1rem;
+            }
+            table {
+                font-size: 0.72rem;
+                min-width: 520px;
+            }
+            .nav-btn {
+                min-width: 96px;
+                font-size: 0.75rem;
+            }
+        }
+
+        @media (pointer: coarse) {
+            .year-btn,
+            .nav-btn,
+            .download-btn {
+                min-height: 44px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="invoice-card">
+    <div class="year-selector">
+        <button id="year-2023-btn" class="year-btn" onclick="filterYear(2023)">2023</button>
+        <button id="year-2024-btn" class="year-btn" onclick="filterYear(2024)">2024</button>
+        <button id="year-2025-btn" class="year-btn" onclick="filterYear(2025)">2025</button>
+        <button id="year-2026-btn" class="year-btn active" onclick="filterYear(2026)">Current</button>
+    </div>
+
+    <div id="views-container"></div>
+    <div id="nav-container" class="nav-controls"></div>
+</div>
+
+<script>
+    const PERSON_DETAILS = {
+        charalampos: {
+            name: "Mr. Charalampos Mavrommatis",
+            address: "Marathonos 8, Tavros, Athens, 17778, Greece",
+            email: "cynical_thought@ymail.com"
+        },
+        dimompenis: {
+            name: "Mr. Dimompenis Mavrommatis",
+            address: "Ground Floor Flat, 6 Sturrock Close, N15 5JA, London, UK",
+            email: "dimosmavr@hotmail.com"
+        },
+        vangelis: {
+            name: "Mr. Vangelis Mavrommatis",
+            address: "DOMEQ, Dornych 519/47e, 617 00, Brno, Czech Republic",
+            email: "v.mavro@hotmail.com"
+        }
+    };
+
+    const BANK_DETAILS = {
+        bank: "Monzo",
+        accountHolder: "Charalampos Mavrommatis",
+        sortCode: "04-00-03",
+        accountNumber: "36462484",
+        swiftBic: "MONZGB2L",
+        iban: "GB78 MONZ 0400 0336 4624 84"
+    };
+
+    let activeYear = 2026;
+    const loadedMonthsByYear = { 2023: [], 2024: [], 2025: [], 2026: [] };
+
+    const UNIFIED_CATEGORIES = [
+        "Cost of Services Provided",
+        "Other Allowable Property Expenses",
+        "Repairs & Maintenance",
+        "Rent, Rates, Insurance, Ground Rent, etc."
+    ];
+
+    function cleanText(str) {
+        if (!str) return '';
+        return str
+            .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{203C}\u{2049}\u{25AA}-\u{25FE}\u{200D}\u{FE00}-\u{FE0F}\u{E0020}-\u{E007F}]/gu, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
+    function standardizeCategories(data) {
+        if (!data || !data.categories) return data;
+        
+        const categoryMap = {};
+        UNIFIED_CATEGORIES.forEach(cat => {
+            categoryMap[cat] = [];
+        });
+
+        data.categories.forEach(cat => {
+            let catName = cleanText(cat.name);
+            if (catName === "Total" || catName === "Σ:" || !catName) return;
+
+            let mappedCat = "Other Allowable Property Expenses";
+            const lowerCat = catName.toLowerCase();
+
+            if (lowerCat.includes("clean") || lowerCat.includes("management") || lowerCat.includes("kumar") || lowerCat.includes("service") || lowerCat.includes("καθαρισμ") || lowerCat.includes("εταιρεία") || lowerCat.includes("broadband") || lowerCat.includes("prime") || lowerCat.includes("netflix") || lowerCat.includes("tv")) {
+                mappedCat = "Cost of Services Provided";
+            } else if (lowerCat.includes("repair") || lowerCat.includes("maintenance") || lowerCat.includes("δόσεις") || lowerCat.includes("boiler") || lowerCat.includes("επίπλων") || lowerCat.includes("κουζίνας") || lowerCat.includes("painting") || lowerCat.includes("materials")) {
+                mappedCat = "Repairs & Maintenance";
+            } else if (lowerCat.includes("gas") || lowerCat.includes("electricity") || lowerCat.includes("rent") || lowerCat.includes("rate") || lowerCat.includes("insurance") || lowerCat.includes("ground") || lowerCat.includes("ρεύμα") || lowerCat.includes("γκάζι") || lowerCat.includes("council") || lowerCat.includes("water")) {
+                mappedCat = "Rent, Rates, Insurance, Ground Rent, etc.";
+            } else if (UNIFIED_CATEGORIES.includes(catName)) {
+                mappedCat = catName;
+            }
+
+            if (cat.items) {
+                categoryMap[mappedCat].push(...cat.items);
+            }
+        });
+
+        const standardizedCategories = [];
+        UNIFIED_CATEGORIES.forEach(catName => {
+            if (categoryMap[catName] && categoryMap[catName].length > 0) {
+                standardizedCategories.push({
+                    name: catName,
+                    items: categoryMap[catName]
+                });
+            }
+        });
+
+        data.categories = standardizedCategories;
+        return data;
+    }
+
+    async function loadInvoices() {
+        const viewsContainer = document.getElementById('views-container');
+        const navContainer = document.getElementById('nav-container');
+
+        const years = [2023, 2024, 2025, 2026];
+
+        for (const year of years) {
+            for (let m = 1; m <= 12; m++) {
+                const monthStr = m.toString().padStart(2, '0');
+                const key = `${monthStr}_${year}`;
+                const dateObj = new Date(year, m - 1, 1);
+                
+                const monthNameEnglish = dateObj.toLocaleDateString('en-US', { month: 'long' });
+                const title = `${monthNameEnglish} ${year}`;
+                const navLabel = `${monthNameEnglish} ${year}`;
+                const pdfName = monthNameEnglish;
+
+                try {
+                    await loadScript(`${year}/${key}.js`);
+                    let data = window[`invoice_${key}`];
+
+                    if (!data) continue;
+
+                    data = standardizeCategories(data);
+                    loadedMonthsByYear[year].push(key);
+
+                    const viewDiv = document.createElement('div');
+                    viewDiv.id = `${key}-view`;
+                    viewDiv.className = `invoice-view`;
+                    viewDiv.dataset.monthName = monthNameEnglish;
+                    viewDiv.dataset.year = year.toString();
+
+                    let rowsHtml = '';
+                    data.categories.forEach(cat => {
+                        rowsHtml += `
+                            <tr class="category-row">
+                                <td colspan="6">${cleanText(cat.name)}</td>
+                            </tr>
+                        `;
+                        cat.items.forEach(item => {
+                            rowsHtml += `
+                                <tr>
+                                    <td data-col="item">${cleanText(item.item)}</td>
+                                    <td data-col="sum" class="num-col">${item.sum}</td>
+                                    <td data-col="charalampos" class="num-col">${item.charalampos}</td>
+                                    <td data-col="dimompenis" class="num-col">${item.dimompenis}</td>
+                                    <td data-col="vangelis" class="num-col">${item.vangelis}</td>
+                                    <td data-col="notes" class="notes-col">${cleanText(item.notes || '')}</td>
+                                </tr>
+                            `;
+                        });
+                    });
+
+                    viewDiv.innerHTML = `
+                        <div class="invoice-header">
+                            <h1>${title}</h1>
+                        </div>
+                        <div id="${key}-client-info" class="client-info-block"></div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th data-col="item">Item</th>
+                                        <th data-col="sum" class="num-col">Σ</th>
+                                        <th data-col="charalampos" class="num-col">
+                                            <div class="th-content">
+                                                <span class="person-name">Charalampos<br>Mavrommatis</span>
+                                                <button class="download-btn" onclick="downloadPersonPDF('${key}-view', 'Charalampos', 'Invoice_${pdfName}_${year}_Charalampos.pdf')" title="Download PDF"><img src="Artwork/download_button.jpeg" alt="Download PDF"></button>
+                                            </div>
+                                        </th>
+                                        <th data-col="dimompenis" class="num-col">
+                                            <div class="th-content">
+                                                <span class="person-name">Dimompenis<br>Mavrommatis</span>
+                                                <button class="download-btn" onclick="downloadPersonPDF('${key}-view', 'Dimompenis', 'Invoice_${pdfName}_${year}_Dimompenis.pdf')" title="Download PDF"><img src="Artwork/download_button.jpeg" alt="Download PDF"></button>
+                                            </div>
+                                        </th>
+                                        <th data-col="vangelis" class="num-col">
+                                            <div class="th-content">
+                                                <span class="person-name">Vangelis<br>Mavrommatis</span>
+                                                <button class="download-btn" onclick="downloadPersonPDF('${key}-view', 'Vangelis', 'Invoice_${pdfName}_${year}_Vangelis.pdf')" title="Download PDF"><img src="Artwork/download_button.jpeg" alt="Download PDF"></button>
+                                            </div>
+                                        </th>
+                                        <th data-col="notes">Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rowsHtml}
+                                    <tr class="total-row">
+                                        <td data-col="item">Σ</td>
+                                        <td data-col="sum" class="num-col">${data.totals.sum}</td>
+                                        <td data-col="charalampos" class="num-col">${data.totals.charalampos}</td>
+                                        <td data-col="dimompenis" class="num-col">${data.totals.dimompenis}</td>
+                                        <td data-col="vangelis" class="num-col">${data.totals.vangelis}</td>
+                                        <td data-col="notes"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="${key}-bank-info" class="bank-info-block"></div>
+                    `;
+
+                    viewsContainer.appendChild(viewDiv);
+
+                    const btn = document.createElement('button');
+                    btn.id = `${key}-btn`;
+                    btn.className = `nav-btn`;
+                    btn.dataset.year = year.toString();
+                    btn.textContent = navLabel;
+                    btn.onclick = function() { showInvoice(`${key}-view`, this); };
+                    navContainer.appendChild(btn);
+
+                } catch (error) {
+                    // Skips files that do not exist
+                }
+            }
+        }
+
+        filterYear(2026);
+    }
+
+    function filterYear(year) {
+        activeYear = year;
+
+        document.getElementById('year-2023-btn').classList.toggle('active', year === 2023);
+        document.getElementById('year-2024-btn').classList.toggle('active', year === 2024);
+        document.getElementById('year-2025-btn').classList.toggle('active', year === 2025);
+        document.getElementById('year-2026-btn').classList.toggle('active', year === 2026);
+
+        const allNavBtns = document.querySelectorAll('.nav-btn');
+        allNavBtns.forEach(btn => {
+            if (parseInt(btn.dataset.year, 10) === year) {
+                btn.style.display = 'block';
+            } else {
+                btn.style.display = 'none';
+            }
+        });
+
+        const activeYearMonths = loadedMonthsByYear[year];
+        if (activeYearMonths && activeYearMonths.length > 0) {
+            const latestKey = activeYearMonths[activeYearMonths.length - 1];
+            const latestView = document.getElementById(`${latestKey}-view`);
+            const latestBtn = document.getElementById(`${latestKey}-btn`);
+            if (latestView && latestBtn) {
+                showInvoice(`${latestKey}-view`, latestBtn);
+            }
+        }
+    }
+
+    function showInvoice(viewId, btnElement) {
+        const views = document.querySelectorAll('.invoice-view');
+        views.forEach(view => view.classList.remove('active'));
+
+        const buttons = document.querySelectorAll('.nav-btn');
+        buttons.forEach(btn => btn.classList.remove('active'));
+
+        document.getElementById(viewId).classList.add('active');
+        btnElement.classList.add('active');
+    }
+
+    function downloadPersonPDF(viewId, personName, filename) {
+        const viewContainer = document.getElementById(viewId);
+        const targetColKey = personName.toLowerCase();
+        
+        const monthName = viewContainer.dataset.monthName || "November";
+        const yearStr = viewContainer.dataset.year || "2026";
+        const monthAbbr = monthName.substring(0, 3).toUpperCase();
+        const customReference = `SD${monthAbbr}${yearStr}`;
+
+        const allPersonKeys = ['charalampos', 'dimompenis', 'vangelis'];
+        const excludeKeys = [...allPersonKeys.filter(k => k !== targetColKey), 'sum', 'notes'];
+
+        const excludeCells = viewContainer.querySelectorAll(
+            excludeKeys.map(k => `[data-col="${k}"]`).join(',')
+        );
+        const categoryCells = viewContainer.querySelectorAll('.category-row td');
+        const allButtons = viewContainer.querySelectorAll('.download-btn');
+
+        const clientInfoBlock = viewContainer.querySelector('.client-info-block');
+        const personData = PERSON_DETAILS[targetColKey];
+        if (clientInfoBlock && personData) {
+            clientInfoBlock.innerHTML = `
+                <strong>INVOICE TO:</strong>
+                <div>${personData.name}</div>
+                <div>${personData.address}</div>
+                <div>${personData.email}</div>
+            `;
+            clientInfoBlock.style.display = 'block';
+        }
+
+        const bankInfoBlock = viewContainer.querySelector('.bank-info-block');
+        if (bankInfoBlock) {
+            bankInfoBlock.innerHTML = `
+                <strong>PAYMENT DETAILS:</strong>
+                <div><strong>Reference:</strong> ${customReference}</div>
+                <div><strong>Bank:</strong> ${BANK_DETAILS.bank}</div>
+                <div><strong>Account Holder:</strong> ${BANK_DETAILS.accountHolder}</div>
+                <div><strong>Sort Code:</strong> ${BANK_DETAILS.sortCode}</div>
+                <div><strong>Account Number:</strong> ${BANK_DETAILS.accountNumber}</div>
+                <div><strong>SWIFT/BIC:</strong> ${BANK_DETAILS.swiftBic}</div>
+                <div><strong>IBAN:</strong> ${BANK_DETAILS.iban}</div>
+            `;
+            bankInfoBlock.style.display = 'block';
+        }
+
+        excludeCells.forEach(cell => cell.style.display = 'none');
+        categoryCells.forEach(td => td.setAttribute('colspan', '2'));
+        allButtons.forEach(btn => btn.style.display = 'none');
+
+        const opt = {
+            margin:       10,
+            filename:     filename,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2 },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        html2pdf().set(opt).from(viewContainer).save().then(() => {
+            excludeCells.forEach(cell => cell.style.display = '');
+            categoryCells.forEach(td => td.setAttribute('colspan', '6'));
+            allButtons.forEach(btn => btn.style.display = 'inline-flex');
+            if (clientInfoBlock) clientInfoBlock.style.display = 'none';
+            if (bankInfoBlock) bankInfoBlock.style.display = 'none';
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', loadInvoices);
+</script>
+
+</body>
+</html>
