@@ -525,6 +525,81 @@
         });
     }
 
+    // Months that read live from a Google Sheet. Key = "MM_YYYY", value = sheet ID (and optional gid).
+    // The sheet must be shared as "Anyone with the link → Viewer".
+    // If the sheet can't be reached, the page falls back to YYYY/MM_YYYY.js.
+    const LIVE_SHEETS = {
+        "12_2026": { id: "1a6jcDYVlkrOv0X-DbrrX5IG6deL7GGcqDicCorhmaUs", gid: 0 }
+    };
+
+    function sheetCell(c) {
+        if (!c || c.v === null || c.v === undefined) return '';
+        if (c.f !== undefined && c.f !== null) return String(c.f).trim();
+        if (typeof c.v === 'number') {
+            const s = '£' + Math.abs(c.v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return c.v < 0 ? '-' + s : s;
+        }
+        return String(c.v).trim();
+    }
+
+    function parseSheetTable(table) {
+        const categories = [];
+        let current = null;
+        let totals = null;
+
+        (table.rows || []).forEach(r => {
+            const row = (r.c || []).map(sheetCell);
+            let [name = '', sum = '', ch = '', di = '', va = '', notes = ''] = row;
+            name = name.replace(/\s+/g, ' ').trim();
+
+            if (/^item\b/i.test(name)) {               // header row ("Item", or "Item <first category>")
+                name = name.replace(/^item\s*/i, '');
+                if (!name) return;
+                sum = ch = di = va = notes = '';
+            }
+            if (!name && !sum) return;
+
+            if (name === 'Σ' || name === 'Σ:' || /^totals?$/i.test(name)) {
+                totals = { sum, charalampos: ch, dimompenis: di, vangelis: va };
+                return;
+            }
+            if (!sum && !ch && !di && !va) {             // category row
+                current = { name, items: [] };
+                categories.push(current);
+                return;
+            }
+            if (!current) {
+                current = { name: 'Other Allowable Property Expenses', items: [] };
+                categories.push(current);
+            }
+            current.items.push({ item: name, sum, charalampos: ch, dimompenis: di, vangelis: va, notes });
+        });
+
+        if (!totals || categories.length === 0) throw new Error('Unexpected sheet layout');
+        return { categories, totals };
+    }
+
+    function loadSheetInvoice(sheet) {
+        return new Promise((resolve, reject) => {
+            const cb = '__sheet_cb_' + Math.random().toString(36).slice(2);
+            const script = document.createElement('script');
+            const timer = setTimeout(() => { cleanup(); reject(new Error('Sheet timeout')); }, 10000);
+            function cleanup() { clearTimeout(timer); delete window[cb]; script.remove(); }
+
+            window[cb] = (resp) => {
+                cleanup();
+                if (!resp || resp.status === 'error' || !resp.table) {
+                    return reject(new Error('Sheet not readable — is it shared "Anyone with the link"?'));
+                }
+                try { resolve(parseSheetTable(resp.table)); } catch (e) { reject(e); }
+            };
+            script.onerror = () => { cleanup(); reject(new Error('Sheet request failed')); };
+            script.src = `https://docs.google.com/spreadsheets/d/${sheet.id}/gviz/tq` +
+                `?gid=${sheet.gid || 0}&headers=0&tqx=out:json;responseHandler:${cb}&_=${Date.now()}`;
+            document.head.appendChild(script);
+        });
+    }
+
     function standardizeCategories(data) {
         if (!data || !data.categories) return data;
         
@@ -587,8 +662,18 @@
                 const pdfName = monthNameEnglish;
 
                 try {
-                    await loadScript(`${year}/${key}.js`);
-                    let data = window[`invoice_${key}`];
+                    let data = null;
+                    if (LIVE_SHEETS[key]) {
+                        try {
+                            data = await loadSheetInvoice(LIVE_SHEETS[key]);
+                        } catch (e) {
+                            console.warn(`Live sheet for ${key} unavailable, using saved copy:`, e.message);
+                        }
+                    }
+                    if (!data) {
+                        await loadScript(`${year}/${key}.js`);
+                        data = window[`invoice_${key}`];
+                    }
 
                     if (!data) continue;
 
