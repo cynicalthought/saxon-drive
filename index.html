@@ -171,7 +171,9 @@
             display: none;
             background: rgba(15, 23, 42, 0.7);
             overflow-y: auto;
+            overscroll-behavior: contain;
             -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
             padding: 32px 16px;
         }
         .doc-modal.open {
@@ -192,12 +194,17 @@
             border-radius: 6px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
         }
-        .doc-modal-close {
+        .doc-modal-buttons {
             position: fixed;
             top: 14px;
             right: 14px;
-            width: 40px;
-            height: 40px;
+            display: flex;
+            gap: 10px;
+            z-index: 1001;
+        }
+        .doc-modal-btn {
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
             border: none;
             background: #ffffff;
@@ -206,7 +213,14 @@
             font-weight: 700;
             cursor: pointer;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            z-index: 1001;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: transform 0.15s ease;
+        }
+        .doc-modal-btn:hover {
+            transform: scale(1.08);
         }
         body.modal-open {
             overflow: hidden;
@@ -600,8 +614,13 @@
     <div id="nav-container" class="nav-controls"></div>
 </div>
 
-<div id="doc-modal" class="doc-modal" onclick="if (!event.target.closest('img')) closeDocModal()">
-    <button type="button" class="doc-modal-close" aria-label="Close">✕</button>
+<div id="doc-modal" class="doc-modal" onclick="if (!event.target.closest('img, #doc-modal-download')) closeDocModal()">
+    <div class="doc-modal-buttons">
+        <a id="doc-modal-download" class="doc-modal-btn" href="#" download aria-label="Download PDF" title="Download PDF">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        </a>
+        <button type="button" class="doc-modal-btn" aria-label="Close" title="Close">✕</button>
+    </div>
     <div id="doc-modal-pages" class="doc-modal-pages"></div>
 </div>
 
@@ -918,7 +937,8 @@
         "12_2026": {
             "cleaning": {
                 pdf: "Documents/2026/12_2026_cleaning.pdf",
-                pages: ["Documents/2026/12_2026_cleaning-1.webp", "Documents/2026/12_2026_cleaning-2.webp"]
+                image: "Documents/2026/12_2026_cleaning.webp",
+                filename: "Cleaning_Invoice_December_2026.pdf"
             }
         }
     };
@@ -937,8 +957,10 @@
         if (event) event.preventDefault();
         const [key, item] = docKey.split('|');
         const doc = DOCUMENTS[key][item];
-        document.getElementById('doc-modal-pages').innerHTML =
-            doc.pages.map((src, i) => `<img src="${src}" alt="Page ${i + 1}">`).join('');
+        document.getElementById('doc-modal-pages').innerHTML = `<img src="${doc.image}" alt="Invoice">`;
+        const dl = document.getElementById('doc-modal-download');
+        dl.href = doc.pdf;
+        dl.setAttribute('download', doc.filename || doc.pdf.split('/').pop());
         const modal = document.getElementById('doc-modal');
         modal.scrollTop = 0;
         modal.classList.add('open');
