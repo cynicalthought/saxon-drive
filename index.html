@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
     <title>Invoices</title>
-    <!-- Include html2pdf.js library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root {
             --primary-color: #1a365d;
@@ -162,11 +160,8 @@
             white-space: nowrap;
         }
 
-        .person-download-link img {
-            height: 14px;
-            width: auto;
+        .person-download-link svg {
             display: block;
-            filter: brightness(0) invert(1);
             flex-shrink: 0;
         }
 
@@ -644,149 +639,155 @@
         return data;
     }
 
+    const DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-label="PDF"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>';
+
+    function personHeader(key, pdfName, year, person) {
+        const p = person.toLowerCase();
+        return `
+            <th data-col="${p}" class="num-col">
+                <div class="th-content">
+                    <a class="person-download-link" onclick="downloadPersonPDF('${key}-view', '${person}', 'Invoice_${pdfName}_${year}_${person}.pdf')" title="Download ${person} Invoice">
+                        <span class="name-stack">
+                            <span>${person}</span>
+                            <span>Mavrommatis</span>
+                        </span>
+                        ${DOWNLOAD_ICON}
+                    </a>
+                </div>
+            </th>`;
+    }
+
+    function buildInvoiceHtml(key, year, monthName, data) {
+        let rowsHtml = '';
+        data.categories.forEach(cat => {
+            rowsHtml += `
+                <tr class="category-row">
+                    <td colspan="6">${cleanText(cat.name)}</td>
+                </tr>`;
+            cat.items.forEach(item => {
+                rowsHtml += `
+                <tr>
+                    <td data-col="item">${cleanText(item.item)}</td>
+                    <td data-col="sum" class="num-col">${item.sum}</td>
+                    <td data-col="charalampos" class="num-col">${item.charalampos}</td>
+                    <td data-col="dimompenis" class="num-col">${item.dimompenis}</td>
+                    <td data-col="vangelis" class="num-col">${item.vangelis}</td>
+                    <td data-col="notes" class="notes-col">${cleanText(item.notes || '')}</td>
+                </tr>`;
+            });
+        });
+
+        return `
+            <div class="invoice-header">
+                <h1>${monthName} ${year}</h1>
+            </div>
+            <div id="${key}-client-info" class="client-info-block"></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-col="item">Item</th>
+                            <th data-col="sum" class="num-col">Σ</th>
+                            ${personHeader(key, monthName, year, 'Charalampos')}
+                            ${personHeader(key, monthName, year, 'Dimompenis')}
+                            ${personHeader(key, monthName, year, 'Vangelis')}
+                            <th data-col="notes">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                        <tr class="total-row">
+                            <td data-col="item">Σ</td>
+                            <td data-col="sum" class="num-col">${data.totals.sum}</td>
+                            <td data-col="charalampos" class="num-col">${data.totals.charalampos}</td>
+                            <td data-col="dimompenis" class="num-col">${data.totals.dimompenis}</td>
+                            <td data-col="vangelis" class="num-col">${data.totals.vangelis}</td>
+                            <td data-col="notes"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="${key}-bank-info" class="bank-info-block"></div>`;
+    }
+
+    function loadSavedInvoice(year, key) {
+        return loadScript(`${year}/${key}.js`)
+            .then(() => window[`invoice_${key}`] || null)
+            .catch(() => null);   // month file doesn't exist
+    }
+
     async function loadInvoices() {
         const viewsContainer = document.getElementById('views-container');
         const navContainer = document.getElementById('nav-container');
-
         const years = [2023, 2024, 2025, 2026];
 
+        // Request every month at once instead of one after another.
+        const months = [];
         for (const year of years) {
             for (let m = 1; m <= 12; m++) {
-                const monthStr = m.toString().padStart(2, '0');
-                const key = `${monthStr}_${year}`;
-                const dateObj = new Date(year, m - 1, 1);
-                
-                const monthNameEnglish = dateObj.toLocaleDateString('en-US', { month: 'long' });
-                const title = `${monthNameEnglish} ${year}`;
-                const navLabel = `${monthNameEnglish} ${year}`;
-                const pdfName = monthNameEnglish;
-
-                try {
-                    let data = null;
-                    if (LIVE_SHEETS[key]) {
-                        try {
-                            data = await loadSheetInvoice(LIVE_SHEETS[key]);
-                        } catch (e) {
-                            console.warn(`Live sheet for ${key} unavailable, using saved copy:`, e.message);
-                        }
-                    }
-                    if (!data) {
-                        await loadScript(`${year}/${key}.js`);
-                        data = window[`invoice_${key}`];
-                    }
-
-                    if (!data) continue;
-
-                    data = standardizeCategories(data);
-                    loadedMonthsByYear[year].push(key);
-
-                    const viewDiv = document.createElement('div');
-                    viewDiv.id = `${key}-view`;
-                    viewDiv.className = `invoice-view`;
-                    viewDiv.dataset.monthName = monthNameEnglish;
-                    viewDiv.dataset.year = year.toString();
-
-                    let rowsHtml = '';
-                    data.categories.forEach(cat => {
-                        rowsHtml += `
-                            <tr class="category-row">
-                                <td colspan="6">${cleanText(cat.name)}</td>
-                            </tr>
-                        `;
-                        cat.items.forEach(item => {
-                            rowsHtml += `
-                                <tr>
-                                    <td data-col="item">${cleanText(item.item)}</td>
-                                    <td data-col="sum" class="num-col">${item.sum}</td>
-                                    <td data-col="charalampos" class="num-col">${item.charalampos}</td>
-                                    <td data-col="dimompenis" class="num-col">${item.dimompenis}</td>
-                                    <td data-col="vangelis" class="num-col">${item.vangelis}</td>
-                                    <td data-col="notes" class="notes-col">${cleanText(item.notes || '')}</td>
-                                </tr>
-                            `;
-                        });
-                    });
-
-                    viewDiv.innerHTML = `
-                        <div class="invoice-header">
-                            <h1>${title}</h1>
-                        </div>
-                        <div id="${key}-client-info" class="client-info-block"></div>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th data-col="item">Item</th>
-                                        <th data-col="sum" class="num-col">Σ</th>
-                                        <th data-col="charalampos" class="num-col">
-                                            <div class="th-content">
-                                                <a class="person-download-link" onclick="downloadPersonPDF('${key}-view', 'Charalampos', 'Invoice_${pdfName}_${year}_Charalampos.pdf')" title="Download Charalampos Invoice">
-                                                    <span class="name-stack">
-                                                        <span>Charalampos</span>
-                                                        <span>Mavrommatis</span>
-                                                    </span>
-                                                    <img src="Artwork/download_button.jpeg" alt="PDF">
-                                                </a>
-                                            </div>
-                                        </th>
-                                        <th data-col="dimompenis" class="num-col">
-                                            <div class="th-content">
-                                                <a class="person-download-link" onclick="downloadPersonPDF('${key}-view', 'Dimompenis', 'Invoice_${pdfName}_${year}_Dimompenis.pdf')" title="Download Dimompenis Invoice">
-                                                    <span class="name-stack">
-                                                        <span>Dimompenis</span>
-                                                        <span>Mavrommatis</span>
-                                                    </span>
-                                                    <img src="Artwork/download_button.jpeg" alt="PDF">
-                                                </a>
-                                            </div>
-                                        </th>
-                                        <th data-col="vangelis" class="num-col">
-                                            <div class="th-content">
-                                                <a class="person-download-link" onclick="downloadPersonPDF('${key}-view', 'Vangelis', 'Invoice_${pdfName}_${year}_Vangelis.pdf')" title="Download Vangelis Invoice">
-                                                    <span class="name-stack">
-                                                        <span>Vangelis</span>
-                                                        <span>Mavrommatis</span>
-                                                    </span>
-                                                    <img src="Artwork/download_button.jpeg" alt="PDF">
-                                                </a>
-                                            </div>
-                                        </th>
-                                        <th data-col="notes">Notes</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${rowsHtml}
-                                    <tr class="total-row">
-                                        <td data-col="item">Σ</td>
-                                        <td data-col="sum" class="num-col">${data.totals.sum}</td>
-                                        <td data-col="charalampos" class="num-col">${data.totals.charalampos}</td>
-                                        <td data-col="dimompenis" class="num-col">${data.totals.dimompenis}</td>
-                                        <td data-col="vangelis" class="num-col">${data.totals.vangelis}</td>
-                                        <td data-col="notes"></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div id="${key}-bank-info" class="bank-info-block"></div>
-                    `;
-
-                    viewsContainer.appendChild(viewDiv);
-
-                    const btn = document.createElement('button');
-                    btn.id = `${key}-btn`;
-                    btn.className = `nav-btn`;
-                    btn.dataset.year = year.toString();
-                    btn.textContent = navLabel;
-                    btn.onclick = function() { showInvoice(`${key}-view`, this); };
-                    navContainer.appendChild(btn);
-
-                } catch (error) {
-                    // Skips files that do not exist
-                }
+                const key = `${m.toString().padStart(2, '0')}_${year}`;
+                const monthName = new Date(year, m - 1, 1).toLocaleDateString('en-US', { month: 'long' });
+                months.push({
+                    year, key, monthName,
+                    saved: loadSavedInvoice(year, key),
+                    live: LIVE_SHEETS[key]
+                        ? loadSheetInvoice(LIVE_SHEETS[key]).catch(e => {
+                              console.warn(`Live sheet for ${key} unavailable, using saved copy:`, e.message);
+                              return null;
+                          })
+                        : null
+                });
             }
         }
 
+        const savedData = await Promise.all(months.map(mo => mo.saved));
+
+        for (let i = 0; i < months.length; i++) {
+            const { year, key, monthName, live } = months[i];
+            let data = savedData[i];
+
+            // Live month with no saved copy: wait for the sheet.
+            if (!data && live) data = await live;
+            if (!data) continue;
+
+            loadedMonthsByYear[year].push(key);
+
+            const viewDiv = document.createElement('div');
+            viewDiv.id = `${key}-view`;
+            viewDiv.className = 'invoice-view';
+            viewDiv.dataset.monthName = monthName;
+            viewDiv.dataset.year = year.toString();
+            viewDiv.innerHTML = buildInvoiceHtml(key, year, monthName, standardizeCategories(data));
+            viewsContainer.appendChild(viewDiv);
+
+            // Show the saved copy now, then swap in the live sheet when it arrives.
+            if (live && data === savedData[i]) {
+                live.then(liveData => {
+                    if (!liveData) return;
+                    viewDiv.innerHTML = buildInvoiceHtml(key, year, monthName, standardizeCategories(liveData));
+                });
+            }
+
+            const btn = document.createElement('button');
+            btn.id = `${key}-btn`;
+            btn.className = 'nav-btn';
+            btn.dataset.year = year.toString();
+            btn.textContent = `${monthName} ${year}`;
+            btn.onclick = function() { showInvoice(`${key}-view`, this); };
+            navContainer.appendChild(btn);
+        }
+
         filterYear(2026);
+    }
+
+    let html2pdfPromise = null;
+    function ensureHtml2Pdf() {
+        if (window.html2pdf) return Promise.resolve();
+        if (!html2pdfPromise) {
+            html2pdfPromise = loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js')
+                .catch(e => { html2pdfPromise = null; throw e; });
+        }
+        return html2pdfPromise;
     }
 
     function filterYear(year) {
@@ -828,7 +829,14 @@
         btnElement.classList.add('active');
     }
 
-    function downloadPersonPDF(viewId, personName, filename) {
+    async function downloadPersonPDF(viewId, personName, filename) {
+        try {
+            await ensureHtml2Pdf();
+        } catch (e) {
+            alert('Could not load the PDF tool. Please check your connection and try again.');
+            return;
+        }
+
         const viewContainer = document.getElementById(viewId);
         const targetColKey = personName.toLowerCase();
         
