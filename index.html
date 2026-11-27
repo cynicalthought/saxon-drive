@@ -146,6 +146,108 @@
             font-weight: 700;
         }
 
+        .item-doc-link {
+            color: var(--secondary-color);
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-bottom: 1px dashed currentColor;
+        }
+        .item-doc-link:hover {
+            color: var(--primary-color);
+        }
+        .item-doc-link svg {
+            flex-shrink: 0;
+        }
+
+        .doc-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 24px;
+        }
+        .doc-modal.open {
+            display: flex;
+        }
+        .doc-modal-panel {
+            background: #ffffff;
+            border-radius: 10px;
+            width: min(900px, 100%);
+            height: min(90dvh, 1100px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+        }
+        .doc-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--primary-color);
+            color: #ffffff;
+        }
+        .doc-modal-header h2 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .doc-modal-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .doc-modal-actions a,
+        .doc-modal-actions button {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            min-height: 34px;
+            display: inline-flex;
+            align-items: center;
+        }
+        .doc-modal-actions a:hover,
+        .doc-modal-actions button:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+        .doc-modal iframe {
+            flex: 1;
+            width: 100%;
+            border: 0;
+            background: #525659;
+        }
+        body.modal-open {
+            overflow: hidden;
+        }
+        @media (max-width: 480px) {
+            .doc-modal {
+                padding: 0;
+            }
+            .doc-modal-panel {
+                width: 100%;
+                height: 100dvh;
+                border-radius: 0;
+            }
+        }
+
         .client-info-block {
             display: none;
             background: var(--bg-accent);
@@ -529,6 +631,19 @@
     <div id="nav-container" class="nav-controls"></div>
 </div>
 
+<div id="doc-modal" class="doc-modal" onclick="if (event.target === this) closeDocModal()">
+    <div class="doc-modal-panel" role="dialog" aria-modal="true" aria-labelledby="doc-modal-title">
+        <div class="doc-modal-header">
+            <h2 id="doc-modal-title"></h2>
+            <div class="doc-modal-actions">
+                <a id="doc-modal-open" href="#" target="_blank" rel="noopener">Open in new tab</a>
+                <button type="button" onclick="closeDocModal()" aria-label="Close">✕</button>
+            </div>
+        </div>
+        <iframe id="doc-modal-frame" title="Document"></iframe>
+    </div>
+</div>
+
 <script>
     const PERSON_DETAILS = {
         charalampos: {
@@ -733,7 +848,7 @@
             cat.items.forEach(item => {
                 rowsHtml += `
                 <tr>
-                    <td data-col="item">${cleanText(item.item)}</td>
+                    <td data-col="item">${itemCellHtml(key, monthName, year, item.item)}</td>
                     <td data-col="sum" class="num-col">${item.sum}</td>
                     <td data-col="charalampos" class="num-col">${item.charalampos}</td>
                     <td data-col="dimompenis" class="num-col">${item.dimompenis}</td>
@@ -835,6 +950,42 @@
         });
     }
     setInterval(tickCountdowns, 1000);
+
+    // Supporting documents shown in a popup when an item is clicked.
+    // Key = "MM_YYYY"; inside, the item name (without emoji, case-insensitive) → PDF path.
+    const DOCUMENTS = {
+        "12_2026": { "cleaning": "Documents/2026/12_2026_cleaning.pdf" }
+    };
+
+    const DOC_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>';
+
+    function itemCellHtml(key, monthName, year, itemName) {
+        const name = cleanText(itemName);
+        const doc = (DOCUMENTS[key] || {})[name.toLowerCase()];
+        if (!doc) return name;
+        const title = `${name} — ${monthName} ${year}`;
+        return `<a class="item-doc-link" href="${doc}" onclick="return openDocModal(event, this.getAttribute('href'), '${title.replace(/'/g, "\\'")}')" title="View document">${name}${DOC_ICON}</a>`;
+    }
+
+    function openDocModal(event, url, title) {
+        if (event) event.preventDefault();
+        document.getElementById('doc-modal-title').textContent = title;
+        document.getElementById('doc-modal-open').href = url;
+        document.getElementById('doc-modal-frame').src = url;
+        document.getElementById('doc-modal').classList.add('open');
+        document.body.classList.add('modal-open');
+        return false;
+    }
+
+    function closeDocModal() {
+        document.getElementById('doc-modal').classList.remove('open');
+        document.body.classList.remove('modal-open');
+        document.getElementById('doc-modal-frame').src = 'about:blank';
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeDocModal();
+    });
 
     function loadSavedInvoice(year, key) {
         return loadScript(`${year}/${key}.js`)
